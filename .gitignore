@@ -9,3 +9,9 @@ node_modules/
 
 .DS_Store
 *.log
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/foundry.lock
