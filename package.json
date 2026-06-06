@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "pretest": "cd contracts && forge build"
   },
   "keywords": [],
   "author": "",
