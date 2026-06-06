@@ -28,11 +28,11 @@ contract DexStakingTest is Test {
         );
 
         // Fund the staking contract with rewards.
-        rewardToken.transfer(address(staking), REWARD_FUND);
+        assertTrue(rewardToken.transfer(address(staking), REWARD_FUND));
 
         // Give alice and bob stake tokens to play with.
-        stakeToken.transfer(alice, 10_000 ether);
-        stakeToken.transfer(bob, 10_000 ether);
+        assertTrue(stakeToken.transfer(alice, 10_000 ether));
+        assertTrue(stakeToken.transfer(bob, 10_000 ether));
     }
 
     // --- helpers ---
@@ -137,14 +137,14 @@ contract DexStakingFuzzTest is Test {
             address(rewardToken),
             REWARD_RATE
         );
-        rewardToken.transfer(address(staking), REWARD_FUND);
+        assertTrue(rewardToken.transfer(address(staking), REWARD_FUND));
     }
 
     /// For any valid amount, staking moves exactly that many tokens
     /// and records exactly that staked balance.
     function testFuzz_stakeConservesTokens(uint256 amount) public {
         amount = bound(amount, 1, 1_000_000 ether);
-        stakeToken.transfer(user, amount);
+        assertTrue(stakeToken.transfer(user, amount));
 
         uint256 userBefore = stakeToken.balanceOf(user);
         uint256 contractBefore = stakeToken.balanceOf(address(staking));
@@ -167,7 +167,7 @@ contract DexStakingFuzzTest is Test {
     /// (round-trip property).
     function testFuzz_stakeWithdrawRoundTrip(uint256 amount) public {
         amount = bound(amount, 1, 1_000_000 ether);
-        stakeToken.transfer(user, amount);
+        assertTrue(stakeToken.transfer(user, amount));
         uint256 start = stakeToken.balanceOf(user);
 
         vm.startPrank(user);
@@ -188,7 +188,7 @@ contract DexStakingFuzzTest is Test {
         stakeAmt = bound(stakeAmt, 1 ether, 1_000_000 ether);
         dt = bound(dt, 1, 365 days);
 
-        stakeToken.transfer(user, stakeAmt);
+        assertTrue(stakeToken.transfer(user, stakeAmt));
         vm.startPrank(user);
         stakeToken.approve(address(staking), stakeAmt);
         staking.stake(stakeAmt);

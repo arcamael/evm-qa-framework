@@ -25,7 +25,7 @@ contract DexStakingInvariants is Test {
             address(rewardToken),
             REWARD_RATE
         );
-        rewardToken.transfer(address(staking), REWARD_FUND);
+        assertTrue(rewardToken.transfer(address(staking), REWARD_FUND));
 
         // Three funded actors.
         address[] memory actors = new address[](3);
@@ -33,7 +33,7 @@ contract DexStakingInvariants is Test {
         actors[1] = makeAddr("bob");
         actors[2] = makeAddr("carol");
         for (uint256 i = 0; i < actors.length; i++) {
-            stakeToken.transfer(actors[i], 1_000_000 ether);
+            assertTrue(stakeToken.transfer(actors[i], 1_000_000 ether));
         }
 
         handler = new StakingHandler(stakeToken, staking, actors);
