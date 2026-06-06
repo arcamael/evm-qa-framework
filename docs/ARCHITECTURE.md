@@ -105,6 +105,48 @@ This pattern means the cost of isolation is two RPC calls per test (one revert, 
 
 ---
 
+## Off-chain reconciliation layer
+
+Real exchanges run an **indexer**: a service that watches the chain and
+writes observed events into a database the application queries, so reads
+don't hit the chain directly. The critical QA question is whether that
+off-chain store actually agrees with on-chain truth. Iteration 3 builds a
+minimal version of this and tests the reconciliation.
+
+### Postgres via Testcontainers
+
+`tests/support/postgres.ts` provisions a disposable `postgres:16-alpine`
+container per test file using `@testcontainers/postgresql`, returning a
+connected `pg` client. The container is started in `beforeAll` and stopped
+in `afterAll`; the container itself is the isolation boundary. This is the
+per-worker-isolation model described in ADR-0002 — parallel-ready by
+construction, in contrast to the shared Anvil chain.
+
+### Indexer simulation
+
+`tests/support/indexer.ts` defines a `staking_events` table and helpers that
+stand in for an indexer. Two schema choices are deliberate:
+
+- **`NUMERIC(78, 0)` for token amounts.** Token values are `uint256`, which
+  exceeds a SQL `BIGINT`. `NUMERIC(78, 0)` holds the full 256-bit range
+  (2^256 is ~78 digits) with no precision loss — storing on-chain amounts
+  off-chain without truncation is a real indexer concern.
+- **`tx_hash UNIQUE` with `ON CONFLICT DO NOTHING`.** Indexers can observe
+  the same event twice (chain reorgs, service restarts); idempotent inserts
+  make re-indexing safe.
+
+### Reconciliation tests
+
+`tests/sql-reconciliation.spec.ts` stakes on-chain, indexes the resulting
+`Staked` event into Postgres, and reconciles the two. Beyond the happy path
+(off-chain sum equals on-chain `totalStaked`), two negative tests prove the
+reconciliation actually detects problems: **drift detection** (a wrong
+indexed amount is caught) and **missing-event detection** (an unindexed
+stake leaves the off-chain store short). A reconciliation check that cannot
+fail is worthless; these prove this one can.
+
+---
+
 ## Key design decisions
 
 **TypeScript-unified stack (ADR-0001).** The decision to anchor the entire QA layer in TypeScript was driven by Synpress — the de-facto wallet E2E tool — being Playwright-native. Since wallet testing is a named requirement, Playwright becomes the test runner, and viem (the modern TS EVM client) fits naturally alongside it. A Python-core alternative was considered and rejected; see [ADR-0001](adr/0001-ts-unified-web3-qa-stack.md) for the full comparison. Solidity is retained for contract-level tests via Foundry, but it does not leak into the QA orchestration layer.
