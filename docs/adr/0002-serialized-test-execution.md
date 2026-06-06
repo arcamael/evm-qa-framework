@@ -1,47 +1,51 @@
-# ADR-0002: Serialized test execution (single worker)
+# ADR-0002: Serialized execution now, per-worker isolation for external services
 
 - **Status:** Accepted
-- **Date:** 2026-06-07
+- **Date:** 2026-06-07 (updated for Iteration 3)
 
 ## Context
 
-Tests share a single Anvil chain spawned in Playwright's `globalSetup`.
-Isolation between tests relies on `evm_snapshot` / `evm_revert`, which
-operate on **global chain state**. Playwright workers are separate
-processes, and per-test deploy/snapshot bookkeeping lives in module-level
-state that is therefore per-worker, not shared.
+The test suite depends on external services that hold mutable state:
 
-With `fullyParallel: true` and multiple workers, two workers running
-deploy-and-snapshot tests against the same chain would corrupt each
-other's state: one worker's `evm_revert` rolls back the shared chain
-underneath another worker, and duplicate deploys advance nonces
-unexpectedly. This is currently latent (only one spec performs
-deploy/snapshot), but would surface as intermittent, order-dependent
-failures as soon as a second such spec is added.
+- **Anvil** (local EVM chain) — shared, spawned once in Playwright's
+  `globalSetup`. Test isolation uses `evm_snapshot` / `evm_revert`, which
+  operate on **global chain state**.
+- **Postgres** (off-chain indexer store, Iteration 3) — provisioned via
+  Testcontainers.
+
+Playwright workers are separate processes. Any state shared across workers
+that is reset mid-test (a global `evm_revert`, a `TRUNCATE`) can be clobbered
+by a concurrent worker, producing intermittent, order-dependent failures.
 
 ## Decision
 
-Run tests with `workers: 1` in all environments.
+1. **Run tests with `workers: 1` in all environments** for now, so shared
+   global state (the single Anvil chain) is accessed serially and
+   snapshot/revert isolation is sound.
+2. **Adopt per-worker isolation as the standing model for external
+   services.** Each backing service should be isolatable per worker so the
+   suite can scale to parallel execution without shared-state hazards.
 
 ## Rationale
 
-- Snapshot/revert isolation is only sound on a single shared chain when
-  access is serialized.
-- The suite is chain-bound, not CPU-bound, so single-worker execution is
-  an acceptable performance trade today.
-- Simple and bulletproof; no risk of heisenbugs.
+- Snapshot/revert on a single shared chain is only safe when serialized.
+- Postgres (Iteration 3) already follows the target model: each test file
+  provisions its **own** Testcontainers Postgres instance (the container is
+  the isolation boundary), so it is parallel-ready by construction.
+- Establishing one isolation principle across services keeps the
+  architecture coherent: every external dependency is per-worker-isolated.
 
 ## Consequences
 
-- No parallel speedup as the suite grows.
-- `fullyParallel: true` is retained (harmless with one worker) so the
-  config is ready if parallelism is reintroduced.
+- No parallel speedup today (single worker), but `fullyParallel: true` is
+  retained so the config is ready when parallelism is enabled.
+- Postgres is already per-worker-isolatable; Anvil is not yet.
 
-## Future work (Option B)
+## Future work
 
-To regain parallelism, give **each worker its own Anvil instance** on a
+To enable parallelism, give **each worker its own Anvil instance** on a
 per-worker port (e.g. `8545 + testInfo.workerIndex`), moving chain spawn
-from `globalSetup` into a worker-scoped fixture. Each worker then has a
-fully isolated chain, making snapshot/revert safe under parallelism.
-This is deferred until suite runtime justifies the added complexity, and
-will be recorded in its own ADR when implemented.
+from `globalSetup` into a worker-scoped fixture — mirroring the per-instance
+model Postgres already uses. The Postgres container helper should likewise
+key off the worker index when multi-worker is enabled. Both are deferred
+until suite runtime justifies the added complexity.
