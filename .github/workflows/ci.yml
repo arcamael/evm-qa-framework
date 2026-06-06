@@ -20,6 +20,10 @@ jobs:
         run: forge build
         working-directory: contracts
 
+      - name: Run Foundry tests (unit, fuzz, invariant)
+        run: forge test
+        working-directory: contracts
+
       - name: Install pnpm
         uses: pnpm/action-setup@v6
 
