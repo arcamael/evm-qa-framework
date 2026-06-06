@@ -15,3 +15,6 @@ contracts/out/
 contracts/cache/
 contracts/broadcast/
 contracts/foundry.lock
+
+# Claude Code local workspace
+.claude/
